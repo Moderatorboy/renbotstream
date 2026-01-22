@@ -17,7 +17,7 @@ import (
 )
 
 func (m *command) LoadStream(dispatcher dispatcher.Dispatcher) {
-	log := m.log.Named("start")
+	log := m.log.Named("stream")
 	defer log.Sugar().Info("Loaded")
 	dispatcher.AddHandler(
 		handlers.NewMessage(nil, sendLink),
@@ -58,12 +58,16 @@ func sendLink(ctx *ext.Context, u *ext.Update) error {
 		ctx.Reply(u, "Sorry, this message type is unsupported.", nil)
 		return dispatcher.EndGroups
 	}
+	
+	// Message ko Log Channel mein forward karo
 	update, err := utils.ForwardMessages(ctx, chatId, config.ValueOf.LogChannelID, u.EffectiveMessage.ID)
 	if err != nil {
 		utils.Logger.Sugar().Error(err)
 		ctx.Reply(u, fmt.Sprintf("Error - %s", err.Error()), nil)
 		return dispatcher.EndGroups
 	}
+	
+	// Forwarded message ka ID nikalo
 	messageID := update.Updates[0].(*tg.UpdateMessageID).ID
 	doc := update.Updates[1].(*tg.UpdateNewChannelMessage).Message.(*tg.Message).Media
 	file, err := utils.FileFromMedia(doc)
@@ -71,20 +75,23 @@ func sendLink(ctx *ext.Context, u *ext.Update) error {
 		ctx.Reply(u, fmt.Sprintf("Error - %s", err.Error()), nil)
 		return dispatcher.EndGroups
 	}
-	fullHash := utils.PackFile(
-		file.FileName,
-		file.FileSize,
-		file.MimeType,
-		file.ID,
-	)
+
+	// ❌ OLD HASH CODE REMOVED
+	/*
+	fullHash := utils.PackFile(...)
 	hash := utils.GetShortHash(fullHash)
 	link := fmt.Sprintf("%s/stream/%d?hash=%s", config.ValueOf.Host, messageID, hash)
+	*/
+
+	// ✅ NEW LINK FORMAT: /stream/ChannelID/MessageID
+	link := fmt.Sprintf("%s/stream/%d/%d", config.ValueOf.Host, config.ValueOf.LogChannelID, messageID)
+
 	text := []styling.StyledTextOption{styling.Code(link)}
 	row := tg.KeyboardButtonRow{
 		Buttons: []tg.KeyboardButtonClass{
 			&tg.KeyboardButtonURL{
 				Text: "Download",
-				URL:  link + "&d=true",
+				URL:  link + "?d=true", // Query param updated
 			},
 		},
 	}
