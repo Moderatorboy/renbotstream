@@ -20,8 +20,6 @@ var log *zap.Logger
 func (e *allRoutes) LoadHome(r *Route) {
 	log = e.log.Named("Stream")
 	defer log.Info("Loaded stream route")
-	
-	// ✅ Change 1: Route update kiya (Channel ID + Message ID)
 	r.Engine.GET("/stream/:channelID/:messageID", getStreamRoute)
 }
 
@@ -29,7 +27,6 @@ func getStreamRoute(ctx *gin.Context) {
 	w := ctx.Writer
 	r := ctx.Request
 
-	// ✅ Change 2: Channel ID aur Message ID dono parse kiye
 	channelIDParm := ctx.Param("channelID")
 	channelID, err := strconv.ParseInt(channelIDParm, 10, 64)
 	if err != nil {
@@ -44,32 +41,19 @@ func getStreamRoute(ctx *gin.Context) {
 		return
 	}
 
-	// ❌ Hash Logic REMOVED (Ab hash check nahi hoga)
-	/* authHash := ctx.Query("hash")
-	if authHash == "" { ... }
-	*/
-
 	worker := bot.GetNextWorker()
 
-	// ✅ Change 3: Channel ID bhi pass kiya (Note: Utils update karna padega iske baad)
 	file, err := utils.FileFromMessage(ctx, worker.Client, channelID, messageID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// ❌ Hash Verification REMOVED
-	/*
-	expectedHash := utils.PackFile(...)
-	if !utils.CheckHash(authHash, expectedHash) { ... }
-	*/
-
-	// for photo messages
 	if file.FileSize == 0 {
 		res, err := worker.Client.API().UploadGetFile(ctx, &tg.UploadGetFileRequest{
 			Location: file.Location,
-			Offset:   0,
-			Limit:    1024 * 1024,
+			Offset:   0,
+			Limit:    1024 * 1024,
 		})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
