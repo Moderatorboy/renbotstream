@@ -26,11 +26,9 @@ func Contains[T comparable](s []T, e T) bool {
 	return false
 }
 
-// ✅ UPDATED: Ab ye ChannelID bhi leta hai
 func GetTGMessage(ctx context.Context, client *gotgproto.Client, channelID int64, messageID int) (*tg.Message, error) {
 	inputMessageID := tg.InputMessageClass(&tg.InputMessageID{ID: messageID})
 	
-	// ✅ UPDATED: Specific Channel Peer mangwa rahe hain
 	channel, err := GetChannelPeer(ctx, client.API(), client.PeerStorage, channelID)
 	if err != nil {
 		return nil, err
@@ -42,7 +40,7 @@ func GetTGMessage(ctx context.Context, client *gotgproto.Client, channelID int64
 		return nil, err
 	}
 	messages := res.(*tg.MessagesChannelMessages)
-	// Safety check agar message array empty ho
+	
 	if len(messages.Messages) == 0 {
 		return nil, fmt.Errorf("message not found or deleted")
 	}
@@ -73,7 +71,7 @@ func FileFromMedia(media tg.MessageMediaClass) (*types.File, error) {
 			FileSize: document.Size,
 			FileName: fileName,
 			MimeType: document.MimeType,
-			ID:       document.ID,
+			ID:       document.ID,
 		}, nil
 	case *tg.MessageMediaPhoto:
 		photo, ok := media.Photo.AsNotEmpty()
@@ -96,18 +94,16 @@ func FileFromMedia(media tg.MessageMediaClass) (*types.File, error) {
 		location.ThumbSize = size.GetType()
 		return &types.File{
 			Location: location,
-			FileSize: 0, // caller should judge if this is a photo or not
+			FileSize: 0, 
 			FileName: fmt.Sprintf("photo_%d.jpg", photo.GetID()),
 			MimeType: "image/jpeg",
-			ID:       photo.GetID(),
+			ID:       photo.GetID(),
 		}, nil
 	}
 	return nil, fmt.Errorf("unexpected type %T", media)
 }
 
-// ✅ UPDATED: Ab ye ChannelID accept karta hai
 func FileFromMessage(ctx context.Context, client *gotgproto.Client, channelID int64, messageID int) (*types.File, error) {
-	// ✅ UPDATED: Cache Key mein ab ChannelID bhi hai taaki mix na ho
 	key := fmt.Sprintf("file:%d:%d:%d", channelID, messageID, client.Self.ID)
 	
 	log := Logger.Named("GetMessageMedia")
@@ -120,7 +116,6 @@ func FileFromMessage(ctx context.Context, client *gotgproto.Client, channelID in
 	
 	log.Debug("Fetching file properties from message ID", zap.Int("messageID", messageID), zap.Int64("channelID", channelID))
 	
-	// ✅ UPDATED: Pass ChannelID
 	message, err := GetTGMessage(ctx, client, channelID, messageID)
 	if err != nil {
 		return nil, err
@@ -140,9 +135,7 @@ func FileFromMessage(ctx context.Context, client *gotgproto.Client, channelID in
 	return file, nil
 }
 
-// ✅ RENAMED & UPDATED: "GetLogChannelPeer" ko "GetChannelPeer" kar diya taaki koi bhi channel fetch kare
 func GetChannelPeer(ctx context.Context, api *tg.Client, peerStorage *storage.PeerStorage, targetChannelID int64) (*tg.InputChannel, error) {
-	// Pehle cache/storage mein check karo
 	cachedInputPeer := peerStorage.GetInputPeerById(targetChannelID)
 
 	switch peer := cachedInputPeer.(type) {
@@ -150,12 +143,11 @@ func GetChannelPeer(ctx context.Context, api *tg.Client, peerStorage *storage.Pe
 		break
 	case *tg.InputPeerChannel:
 		return &tg.InputChannel{
-			ChannelID:  peer.ChannelID,
+			ChannelID:  peer.ChannelID,
 			AccessHash: peer.AccessHash,
 		}, nil
 	}
 	
-	// Agar nahi mila to API call karo
 	inputChannel := &tg.InputChannel{
 		ChannelID: targetChannelID,
 	}
@@ -181,7 +173,6 @@ func ForwardMessages(ctx *ext.Context, fromChatId, toChatId int64, messageID int
 		return nil, fmt.Errorf("fromChatId: %d is not a valid peer", fromChatId)
 	}
 	
-	// ✅ UPDATED: Yahan hum LogChannelID bhej rahe hain kyunki hume wahan forward karna hai
 	toPeer, err := GetChannelPeer(ctx, ctx.Raw, ctx.PeerStorage, config.ValueOf.LogChannelID)
 	if err != nil {
 		return nil, err
@@ -190,8 +181,8 @@ func ForwardMessages(ctx *ext.Context, fromChatId, toChatId int64, messageID int
 	update, err := ctx.Raw.MessagesForwardMessages(ctx, &tg.MessagesForwardMessagesRequest{
 		RandomID: []int64{rand.Int63()},
 		FromPeer: fromPeer,
-		ID:       []int{messageID},
-		ToPeer:   &tg.InputPeerChannel{ChannelID: toPeer.ChannelID, AccessHash: toPeer.AccessHash},
+		ID:       []int{messageID},
+		ToPeer:   &tg.InputPeerChannel{ChannelID: toPeer.ChannelID, AccessHash: toPeer.AccessHash},
 	})
 	if err != nil {
 		return nil, err
