@@ -29,9 +29,23 @@ func Contains[T comparable](s []T, e T) bool {
 func GetTGMessage(ctx context.Context, client *gotgproto.Client, channelID int64, messageID int) (*tg.Message, error) {
 	inputMessageID := tg.InputMessageClass(&tg.InputMessageID{ID: messageID})
 	
+	// Try to get channel peer, if fails, refresh dialogs
 	channel, err := GetChannelPeer(ctx, client.API(), client.PeerStorage, channelID)
 	if err != nil {
-		return nil, err
+		// Attempt to refresh dialogs to find the channel
+		Logger.Info("Channel not found in cache, refreshing dialogs...", zap.Int64("channelID", channelID))
+		_, _ = client.API().MessagesGetDialogs(ctx, &tg.MessagesGetDialogsRequest{
+			OffsetDate: 0,
+			OffsetID:   0,
+			OffsetPeer: &tg.InputPeerEmpty{},
+			Limit:      100,
+			Hash:       0,
+		})
+		// Retry getting the peer
+		channel, err = GetChannelPeer(ctx, client.API(), client.PeerStorage, channelID)
+		if err != nil {
+			return nil, err
+		}
 	}
 	
 	messageRequest := tg.ChannelsGetMessagesRequest{Channel: channel, ID: []tg.InputMessageClass{inputMessageID}}
@@ -173,12 +187,21 @@ func ForwardMessages(ctx *ext.Context, fromChatId, toChatId int64, messageID int
 		return nil, fmt.Errorf("fromChatId: %d is not a valid peer", fromChatId)
 	}
 	
-	toPeer, err := GetChannelPeer(ctx, ctx.Raw, ctx.PeerStorage, config.ValueOf.LogChannelID)
+	// Force refresh peer if not found
+	toPeer, err := GetChannelPeer(ctx.Context, ctx.Raw, ctx.PeerStorage, config.ValueOf.LogChannelID)
 	if err != nil {
-		return nil, err
+		// Try refreshing dialogs
+		_, _ = ctx.Raw.MessagesGetDialogs(ctx.Context, &tg.MessagesGetDialogsRequest{
+			Limit: 100,
+		})
+		// Retry
+		toPeer, err = GetChannelPeer(ctx.Context, ctx.Raw, ctx.PeerStorage, config.ValueOf.LogChannelID)
+		if err != nil {
+			return nil, err
+		}
 	}
 	
-	update, err := ctx.Raw.MessagesForwardMessages(ctx, &tg.MessagesForwardMessagesRequest{
+	update, err := ctx.Raw.MessagesForwardMessages(ctx.Context, &tg.MessagesForwardMessagesRequest{
 		RandomID: []int64{rand.Int63()},
 		FromPeer: fromPeer,
 		ID:       []int{messageID},
