@@ -59,7 +59,6 @@ func sendLink(ctx *ext.Context, u *ext.Update) error {
 		return dispatcher.EndGroups
 	}
 	
-	// Message ko Log Channel mein forward karo
 	update, err := utils.ForwardMessages(ctx, chatId, config.ValueOf.LogChannelID, u.EffectiveMessage.ID)
 	if err != nil {
 		utils.Logger.Sugar().Error(err)
@@ -67,7 +66,6 @@ func sendLink(ctx *ext.Context, u *ext.Update) error {
 		return dispatcher.EndGroups
 	}
 	
-	// Forwarded message ka ID nikalo
 	messageID := update.Updates[0].(*tg.UpdateMessageID).ID
 	doc := update.Updates[1].(*tg.UpdateNewChannelMessage).Message.(*tg.Message).Media
 	file, err := utils.FileFromMedia(doc)
@@ -76,22 +74,23 @@ func sendLink(ctx *ext.Context, u *ext.Update) error {
 		return dispatcher.EndGroups
 	}
 
-	// ❌ OLD HASH CODE REMOVED
-	/*
-	fullHash := utils.PackFile(...)
-	hash := utils.GetShortHash(fullHash)
-	link := fmt.Sprintf("%s/stream/%d?hash=%s", config.ValueOf.Host, messageID, hash)
-	*/
+	// ✅ FIX: Force check for -100 prefix
+	channelIDStr := fmt.Sprintf("%d", config.ValueOf.LogChannelID)
+	
+	// Agar ID mein -100 nahi hai, toh hum khud laga denge
+	if !strings.HasPrefix(channelIDStr, "-100") {
+		channelIDStr = "-100" + channelIDStr
+	}
 
-	// ✅ NEW LINK FORMAT: /stream/ChannelID/MessageID
-	link := fmt.Sprintf("%s/stream/%d/%d", config.ValueOf.Host, config.ValueOf.LogChannelID, messageID)
+	// Link generation with fixed Channel ID
+	link := fmt.Sprintf("%s/stream/%s/%d", config.ValueOf.Host, channelIDStr, messageID)
 
 	text := []styling.StyledTextOption{styling.Code(link)}
 	row := tg.KeyboardButtonRow{
 		Buttons: []tg.KeyboardButtonClass{
 			&tg.KeyboardButtonURL{
 				Text: "Download",
-				URL:  link + "?d=true", // Query param updated
+				URL:  link + "?d=true",
 			},
 		},
 	}
