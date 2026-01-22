@@ -16,6 +16,16 @@ import (
 	"go.uber.org/zap"
 )
 
+// Helper to convert -100xxxx to xxxx
+func GetNormalizedChatID(id int64) int64 {
+	// Agar ID -100 se shuru hoti hai (13 digits negative)
+	if id < -1000000000000 {
+		return (id * -1) - 1000000000000
+	}
+	// Agar already raw ID hai ya group ID hai
+	return id
+}
+
 // https://stackoverflow.com/a/70802740/15807350
 func Contains[T comparable](s []T, e T) bool {
 	for _, v := range s {
@@ -29,7 +39,7 @@ func Contains[T comparable](s []T, e T) bool {
 func GetTGMessage(ctx context.Context, client *gotgproto.Client, channelID int64, messageID int) (*tg.Message, error) {
 	inputMessageID := tg.InputMessageClass(&tg.InputMessageID{ID: messageID})
 	
-	// Try to get channel peer, if fails, refresh dialogs
+	// ✅ Fix: Use Normalized ID
 	channel, err := GetChannelPeer(ctx, client.API(), client.PeerStorage, channelID)
 	if err != nil {
 		// Attempt to refresh dialogs to find the channel
@@ -118,7 +128,9 @@ func FileFromMedia(media tg.MessageMediaClass) (*types.File, error) {
 }
 
 func FileFromMessage(ctx context.Context, client *gotgproto.Client, channelID int64, messageID int) (*types.File, error) {
-	key := fmt.Sprintf("file:%d:%d:%d", channelID, messageID, client.Self.ID)
+	// ✅ Fix: Use Normalized ID for Cache Key
+	normID := GetNormalizedChatID(channelID)
+	key := fmt.Sprintf("file:%d:%d:%d", normID, messageID, client.Self.ID)
 	
 	log := Logger.Named("GetMessageMedia")
 	var cachedMedia types.File
@@ -150,7 +162,10 @@ func FileFromMessage(ctx context.Context, client *gotgproto.Client, channelID in
 }
 
 func GetChannelPeer(ctx context.Context, api *tg.Client, peerStorage *storage.PeerStorage, targetChannelID int64) (*tg.InputChannel, error) {
-	cachedInputPeer := peerStorage.GetInputPeerById(targetChannelID)
+	// ✅ Fix: Convert -100xxxx to xxxx before searching
+	normID := GetNormalizedChatID(targetChannelID)
+	
+	cachedInputPeer := peerStorage.GetInputPeerById(normID)
 
 	switch peer := cachedInputPeer.(type) {
 	case *tg.InputPeerEmpty:
@@ -163,7 +178,7 @@ func GetChannelPeer(ctx context.Context, api *tg.Client, peerStorage *storage.Pe
 	}
 	
 	inputChannel := &tg.InputChannel{
-		ChannelID: targetChannelID,
+		ChannelID: normID, // Use Normalized ID
 	}
 	channels, err := api.ChannelsGetChannels(ctx, []tg.InputChannelClass{inputChannel})
 	if err != nil {
@@ -182,20 +197,23 @@ func GetChannelPeer(ctx context.Context, api *tg.Client, peerStorage *storage.Pe
 }
 
 func ForwardMessages(ctx *ext.Context, fromChatId, toChatId int64, messageID int) (*tg.Updates, error) {
-	fromPeer := ctx.PeerStorage.GetInputPeerById(fromChatId)
+	// ✅ Fix: Normalize IDs for Forwarding too
+	normFromID := GetNormalizedChatID(fromChatId)
+	normToID := GetNormalizedChatID(toChatId)
+
+	fromPeer := ctx.PeerStorage.GetInputPeerById(normFromID)
 	if fromPeer.Zero() {
 		return nil, fmt.Errorf("fromChatId: %d is not a valid peer", fromChatId)
 	}
 	
-	// Force refresh peer if not found
-	toPeer, err := GetChannelPeer(ctx.Context, ctx.Raw, ctx.PeerStorage, config.ValueOf.LogChannelID)
+	toPeer, err := GetChannelPeer(ctx.Context, ctx.Raw, ctx.PeerStorage, normToID)
 	if err != nil {
 		// Try refreshing dialogs
 		_, _ = ctx.Raw.MessagesGetDialogs(ctx.Context, &tg.MessagesGetDialogsRequest{
 			Limit: 100,
 		})
 		// Retry
-		toPeer, err = GetChannelPeer(ctx.Context, ctx.Raw, ctx.PeerStorage, config.ValueOf.LogChannelID)
+		toPeer, err = GetChannelPeer(ctx.Context, ctx.Raw, ctx.PeerStorage, normToID)
 		if err != nil {
 			return nil, err
 		}
