@@ -20,51 +20,56 @@ var log *zap.Logger
 func (e *allRoutes) LoadHome(r *Route) {
 	log = e.log.Named("Stream")
 	defer log.Info("Loaded stream route")
-	r.Engine.GET("/stream/:messageID", getStreamRoute)
+	
+	// ✅ Change 1: Route update kiya (Channel ID + Message ID)
+	r.Engine.GET("/stream/:channelID/:messageID", getStreamRoute)
 }
 
 func getStreamRoute(ctx *gin.Context) {
 	w := ctx.Writer
 	r := ctx.Request
 
+	// ✅ Change 2: Channel ID aur Message ID dono parse kiye
+	channelIDParm := ctx.Param("channelID")
+	channelID, err := strconv.ParseInt(channelIDParm, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid Channel ID", http.StatusBadRequest)
+		return
+	}
+
 	messageIDParm := ctx.Param("messageID")
 	messageID, err := strconv.Atoi(messageIDParm)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "Invalid Message ID", http.StatusBadRequest)
 		return
 	}
 
-	authHash := ctx.Query("hash")
-	if authHash == "" {
-		http.Error(w, "missing hash param", http.StatusBadRequest)
-		return
-	}
+	// ❌ Hash Logic REMOVED (Ab hash check nahi hoga)
+	/* authHash := ctx.Query("hash")
+	if authHash == "" { ... }
+	*/
 
 	worker := bot.GetNextWorker()
 
-	file, err := utils.FileFromMessage(ctx, worker.Client, messageID)
+	// ✅ Change 3: Channel ID bhi pass kiya (Note: Utils update karna padega iske baad)
+	file, err := utils.FileFromMessage(ctx, worker.Client, channelID, messageID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	expectedHash := utils.PackFile(
-		file.FileName,
-		file.FileSize,
-		file.MimeType,
-		file.ID,
-	)
-	if !utils.CheckHash(authHash, expectedHash) {
-		http.Error(w, "invalid hash", http.StatusBadRequest)
-		return
-	}
+	// ❌ Hash Verification REMOVED
+	/*
+	expectedHash := utils.PackFile(...)
+	if !utils.CheckHash(authHash, expectedHash) { ... }
+	*/
 
 	// for photo messages
 	if file.FileSize == 0 {
 		res, err := worker.Client.API().UploadGetFile(ctx, &tg.UploadGetFileRequest{
 			Location: file.Location,
-			Offset:   0,
-			Limit:    1024 * 1024,
+			Offset:   0,
+			Limit:    1024 * 1024,
 		})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
