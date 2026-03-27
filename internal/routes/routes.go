@@ -2,7 +2,6 @@ package routes
 
 import (
 	"reflect"
-
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -23,6 +22,15 @@ type allRoutes struct {
 func Load(log *zap.Logger, r *gin.Engine) {
 	log = log.Named("routes")
 	defer log.Sugar().Info("Loaded all API Routes")
+
+	// ── Ping endpoint — UptimeRobot ke liye ──
+	r.GET("/ping", func(ctx *gin.Context) {
+		ctx.String(200, "pong")
+	})
+	r.HEAD("/ping", func(ctx *gin.Context) {
+		ctx.Status(200)
+	})
+
 	route := &Route{Name: "/", Engine: r}
 	route.Init(r)
 	Type := reflect.TypeOf(&allRoutes{log})
