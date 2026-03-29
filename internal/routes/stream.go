@@ -55,9 +55,9 @@ func getDurationRoute(ctx *gin.Context) {
 	}
 
 	// Pehla 512KB fetch karo — MP4 moov box isme hota hai
-	chunkSize := int32(512 * 1024)
+	chunkSize := int(512 * 1024)
 	if int64(chunkSize) > file.FileSize {
-		chunkSize = int32(file.FileSize)
+		chunkSize = int(file.FileSize)
 	}
 
 	res, err := worker.Client.API().UploadGetFile(ctx, &tg.UploadGetFileRequest{
