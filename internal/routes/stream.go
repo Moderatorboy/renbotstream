@@ -54,16 +54,18 @@ func getDurationRoute(ctx *gin.Context) {
 		return
 	}
 
-	// Pehla 512KB fetch karo — MP4 moov box isme hota hai
-	chunkSize := int(512 * 1024)
-	if int64(chunkSize) > file.FileSize {
-		chunkSize = int(file.FileSize)
+	// Last 512KB fetch karo — moov box MP4 ke end mein hota hai
+	chunkSize := int64(512 * 1024)
+	offset := file.FileSize - chunkSize
+	if offset < 0 {
+		offset = 0
+		chunkSize = file.FileSize
 	}
 
 	res, err := worker.Client.API().UploadGetFile(ctx, &tg.UploadGetFileRequest{
 		Location: file.Location,
-		Offset:   0,
-		Limit:    chunkSize,
+		Offset:   offset,
+		Limit:    int(chunkSize),
 	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Could not fetch file chunk"})
@@ -107,7 +109,6 @@ func parseMp4Duration(data []byte) int64 {
 			break
 		}
 		if i+size > len(data) {
-			// Partial box — nested search try karo
 			if boxType == "moov" {
 				inner := parseMp4Duration(data[i+8:])
 				if inner > 0 {
