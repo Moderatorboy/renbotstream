@@ -64,7 +64,7 @@ func getDurationRoute(ctx *gin.Context) {
 
 	res, err := worker.Client.API().UploadGetFile(ctx, &tg.UploadGetFileRequest{
 		Location: file.Location,
-		Offset:   int(offset),
+		Offset:   offset,
 		Limit:    int(chunkSize),
 	})
 	if err != nil {
