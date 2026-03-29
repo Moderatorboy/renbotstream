@@ -26,7 +26,7 @@ func (e *allRoutes) LoadHome(r *Route) {
 
 // ─── DURATION ROUTE ───────────────────────────────────
 // GET /stream/:channelID/:messageID/duration
-// Returns: { "duration": 3725 }  (seconds mein)
+// Returns: { "duration": 273 }  (seconds mein)
 func getDurationRoute(ctx *gin.Context) {
 	channelIDParm := ctx.Param("channelID")
 	channelID, err := strconv.ParseInt(channelIDParm, 10, 64)
@@ -64,7 +64,7 @@ func getDurationRoute(ctx *gin.Context) {
 
 	res, err := worker.Client.API().UploadGetFile(ctx, &tg.UploadGetFileRequest{
 		Location: file.Location,
-		Offset:   offset,
+		Offset:   int(offset),
 		Limit:    int(chunkSize),
 	})
 	if err != nil {
